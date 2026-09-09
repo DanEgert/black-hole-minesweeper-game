@@ -18,7 +18,7 @@ Fewer moves wins. Time is recorded, but patience is usually the better navigatio
 
 ## Play on Windows
 
-The easiest route is the installer on the repository's **Releases** page. It installs the free MATLAB Runtime automatically; MATLAB and a MATLAB license are not required.
+The easiest route is the installer on the repository's **Releases** page (click link on the right). It installs the free MATLAB Runtime automatically; MATLAB and a MATLAB license are not required.
 
 The first installation may take a while because the MATLAB Runtime is much larger than the game itself.
 
