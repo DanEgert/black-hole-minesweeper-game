@@ -45,37 +45,13 @@ if ~isempty(missing_assets)
         'Missing game asset(s):\n%s',strjoin(missing_assets,'\n'));
 end
 
-%start game
+%create the game window
 ops.figure=figure(1);
 ops.figure.Units='pixels';
 ops.figure.WindowState='maximized';
 ops.figure_resolution=[1024 748];
-
-%set(ops.frame_h,'Maximized',1);
-%set(gcf,'MenuBar','none');
-
-set(gca,'DataAspectRatioMode','auto');
-set(gca,'Position',[0 0 1 1]);
-
-img=imread(ops.intro_image);
-image(img);
-axis image off
-
-mission_briefing = { ...
-    'MISSION BRIEFING'; ...
-    'Race an alien navigator through a field of black holes and reach Earth first.'; ...
-    'The alien will play the same map after you. Fewer moves wins.'};
-annotation('textbox',[0.16,0.70,0.68,0.17], ...
-    'String',mission_briefing, ...
-    'FontSize',15,'FontWeight','bold','Color','w', ...
-    'HorizontalAlignment','center','VerticalAlignment','middle', ...
-    'EdgeColor',[0.2 0.8 0.85],'LineWidth',1.5, ...
-    'BackgroundColor','k','FaceAlpha',0.55);
-
-navrules=[ 'Left-click to reveal the possible number of black holes in the vicinity'...
-    ' \nRight-click to flag a black hole. \nChoose the difficulty'...
-    ' level using the radio buttons on the left and click Ready? to begin!'];
-annotation('textbox',[0.1, 0.05, 0.85, 0.05], 'String', sprintf(navrules),'fontsize',12,'color','w', 'EdgeColor', 'none');
+set(ops.figure,'Name','Black Hole Minesweeper','NumberTitle','off', ...
+    'MenuBar','none');
 
 %easy as default case
 ops.map=ops.map_easy;
@@ -83,27 +59,7 @@ ops.mine_numbers=ops.mine_numbers_easy;
 ops.cell_width=ops.cell_width_easy;
 ops.cell_height=ops.cell_height_easy;
 ops.offset=ops.offset_easy;
-
-%display map size/number of mines
-txt = ['Easy simulates a ' num2str(size(ops.map,1)) 'x' num2str(size(ops.map,2)) ' grid with ' num2str(ops.mine_numbers(1)) '-' num2str(ops.mine_numbers(2)) ' black holes'];
-ops.level=annotation('textbox',[0.1, 0.15, 0.85, 0.05], 'String', txt,'fontsize',15,'color','w', 'EdgeColor', 'none');
-
-bg = uibuttongroup('Position',[0 0 0.1 1], 'SelectionChangedFcn',{@bselection,ops});
-
-c1 = uicontrol(bg,'Style','radiobutton','String',{'Easy'},'Position',[10 75 100 30]);
-c1.FontSize=10;
-c2 = uicontrol(bg,'Style','radiobutton','String',{'Medium'},'Position',[10 100 100 30]);
-c2.FontSize=10;
-c3 = uicontrol(bg,'Style','radiobutton','String',{'Hard'},'Position',[10 125 100 30]);
-c3.FontSize=10;
-h = uicontrol('String','Ready?','Callback','uiresume(gcbf)');
-
-%hold until confirm
-uiwait(ops.figure);
-
-if ~isempty(bg.UserData)
-    ops = bg.UserData;
-end
+ops.difficulty='Easy';
 
 %set internal parameters
 ops.p_threshold=0.1; %mcts minimum confidence no mine before chosing random
@@ -111,42 +67,159 @@ ops.flag_limit=0.9; %min prob not mine to flag
 ops.num_trials=10000; %max number of MCTS playouts
 ops.max_trial=100; %mean number of trials per field before making move
 ops.min_trial=10; %min numb trials before guessingv
-ops.player_moves=0;
-ops.computer_moves=0;
+stats=load_stats();
+next_action='menu';
 
-%start game
-play_game(ops);
+while isgraphics(ops.figure) && ~strcmp(next_action,'quit')
+    if strcmp(next_action,'menu')
+        [ops,next_action]=show_main_menu(ops,stats);
+        if strcmp(next_action,'quit') || ~isgraphics(ops.figure)
+            break
+        end
+    end
 
-close all
+    result=play_game(ops);
+    stats=record_game(stats,result);
+    save_stats(stats);
+    next_action=show_results(ops,result,stats);
+end
 
+if isgraphics(ops.figure)
+    close(ops.figure);
+end
+
+end
+
+function [ops,action]=show_main_menu(ops,stats)
+
+clf(ops.figure);
+set(ops.figure,'MenuBar','none');
+ax=axes('Parent',ops.figure,'Position',[0 0 1 1]);
+img=imread(ops.intro_image);
+image(ax,img);
+axis(ax,'image','off');
+
+mission_briefing = { ...
+    'MISSION BRIEFING'; ...
+    'Race an alien navigator through a field of black holes and reach Earth first.'; ...
+    'You and the alien play the same map. Fewer moves wins.'};
+annotation(ops.figure,'textbox',[0.16,0.72,0.68,0.15], ...
+    'String',mission_briefing,'FontSize',15,'FontWeight','bold','Color','w', ...
+    'HorizontalAlignment','center','VerticalAlignment','middle', ...
+    'EdgeColor',[0.2 0.8 0.85],'LineWidth',1.5, ...
+    'BackgroundColor','k','FaceAlpha',0.60);
+
+how_to_play = { ...
+    'HOW TO PLAY'; ...
+    'Left-click a sector to reveal it.'; ...
+    'Right-click a hidden sector to flag or unflag a black hole.'; ...
+    'Flag every black hole without opening one. Then watch the alien try.'};
+annotation(ops.figure,'textbox',[0.20,0.10,0.60,0.17], ...
+    'String',how_to_play,'FontSize',12,'FontWeight','bold','Color','w', ...
+    'HorizontalAlignment','center','VerticalAlignment','middle', ...
+    'EdgeColor',[0.95 0.55 0.15],'LineWidth',1.2, ...
+    'BackgroundColor','k','FaceAlpha',0.60);
+
+txt=[ops.difficulty ': ' num2str(size(ops.map,1)) 'x' num2str(size(ops.map,2)) ...
+    ' grid, ' num2str(ops.mine_numbers(1)) '-' ...
+    num2str(ops.mine_numbers(2)) ' black holes'];
+ops.level=annotation(ops.figure,'textbox',[0.20,0.28,0.60,0.05], ...
+    'String',txt,'FontSize',13,'FontWeight','bold','Color','w', ...
+    'HorizontalAlignment','center','EdgeColor','none');
+
+record_text=sprintf('ALL-TIME LOG\n%d matches  |  %d wins  |  %d losses  |  %d ties', ...
+    stats.totalGames,stats.wins,stats.losses,stats.ties);
+annotation(ops.figure,'textbox',[0.72,0.35,0.26,0.09], ...
+    'String',record_text,'FontSize',10,'FontWeight','bold','Color','w', ...
+    'HorizontalAlignment','center','VerticalAlignment','middle', ...
+    'EdgeColor','none','BackgroundColor','k','FaceAlpha',0.50);
+
+bg=uibuttongroup(ops.figure,'Units','normalized','Position',[0.02 0.09 0.12 0.24], ...
+    'Title','Difficulty','FontWeight','bold', ...
+    'SelectionChangedFcn',{@bselection,ops});
+bg.UserData=ops;
+c1=uicontrol(bg,'Style','radiobutton','String','Easy','Units','normalized', ...
+    'Position',[0.12 0.68 0.78 0.22],'FontSize',10);
+c2=uicontrol(bg,'Style','radiobutton','String','Medium','Units','normalized', ...
+    'Position',[0.12 0.39 0.78 0.22],'FontSize',10);
+c3=uicontrol(bg,'Style','radiobutton','String','Hard','Units','normalized', ...
+    'Position',[0.12 0.10 0.78 0.22],'FontSize',10);
+if strcmp(ops.difficulty,'Medium')
+    bg.SelectedObject=c2;
+elseif strcmp(ops.difficulty,'Hard')
+    bg.SelectedObject=c3;
+else
+    bg.SelectedObject=c1;
+end
+
+setappdata(ops.figure,'menu_action','quit');
+uicontrol(ops.figure,'Style','pushbutton','String','PLAY', ...
+    'Units','normalized','Position',[0.44 0.025 0.12 0.055], ...
+    'FontSize',12,'FontWeight','bold', ...
+    'Callback',@(src,~)resume_with_action(src,'play'));
+uicontrol(ops.figure,'Style','pushbutton','String','How the alien thinks', ...
+    'Units','normalized','Position',[0.79 0.025 0.17 0.055], ...
+    'Callback',@show_alien_help);
+uicontrol(ops.figure,'Style','pushbutton','String','Quit', ...
+    'Units','normalized','Position',[0.02 0.025 0.09 0.045], ...
+    'Callback',@(src,~)resume_with_action(src,'quit'));
+
+uiwait(ops.figure);
+if isgraphics(ops.figure)
+    action=getappdata(ops.figure,'menu_action');
+    if ~isempty(bg.UserData)
+        ops=bg.UserData;
+    end
+else
+    action='quit';
+end
+
+end
+
+function resume_with_action(source,action)
+fig=ancestor(source,'figure');
+setappdata(fig,'menu_action',action);
+uiresume(fig);
+end
+
+function show_alien_help(~,~)
+helpdlg({ ...
+    'The alien repeatedly samples possible black-hole layouts.'; ...
+    'It keeps layouts that agree with every revealed number.'; ...
+    'The surviving layouts estimate each hidden sector''s risk.'; ...
+    'It flags high-risk sectors, reveals low-risk sectors, and guesses when clues run out.'}, ...
+    'How the alien thinks');
 end
 
 %radio buttons for selecting difficulty
 function bselection(source, event, ops)
 
 %parameters
-if isequal(event.NewValue.String,{'Easy'})
+if strcmp(event.NewValue.String,'Easy')
     ops.mine_numbers=ops.mine_numbers_easy; %min and max no of mines
     ops.map=ops.map_easy;
     ops.cell_width=ops.cell_width_easy;
     ops.cell_height=ops.cell_height_easy;
     ops.offset=ops.offset_easy;
+    ops.difficulty='Easy';
 end
 
-if isequal(event.NewValue.String,{'Medium'})
+if strcmp(event.NewValue.String,'Medium')
     ops.mine_numbers=ops.mine_numbers_medium; %min and max no of mines
     ops.map=ops.map_medium;
     ops.cell_width=ops.cell_width_medium;
     ops.cell_height=ops.cell_height_medium;
     ops.offset=ops.offset_medium;
+    ops.difficulty='Medium';
 end
 
-if isequal(event.NewValue.String,{'Hard'})
+if strcmp(event.NewValue.String,'Hard')
     ops.mine_numbers=ops.mine_numbers_hard; %min and max no of mines
     ops.map=ops.map_hard;
     ops.cell_width=ops.cell_width_hard;
     ops.cell_height=ops.cell_height_hard;
     ops.offset=ops.offset_hard;
+    ops.difficulty='Hard';
 end
 txt = [char(event.NewValue.String) ' simulates a ' num2str(size(ops.map,1)) 'x' num2str(size(ops.map,2)) ' grid with ' num2str(ops.mine_numbers(1)) '-' num2str(ops.mine_numbers(2)) ' black holes'];
 %set(ops.level, 'textbox',[0.3, 0.1, 0.85, 0.55]);
@@ -188,9 +261,14 @@ end
 end
 
 %actual game
-function play_game(ops)
+function result=play_game(ops)
 
 clf
+
+ops.player_moves=0;
+ops.computer_moves=0;
+ops.player_time=NaN;
+ops.computer_time=NaN;
 
 %create map
 [ops]=createmap(ops);
@@ -383,109 +461,205 @@ for j=1:2
 end
 
 %outcome is not 'continue'
-ops=gameover(ops,outcome);
+result=build_result(ops,outcome);
 
 end
 
-%this function displays summary message and adds an image
-%after computer finished
+function result=build_result(ops,inputvariable)
 
-function [ops]=gameover(ops,inputvariable)
+result.timestamp=datestr(now,31);
+result.difficulty=ops.difficulty;
+result.playerMoves=ops.player_moves;
+result.computerMoves=ops.computer_moves;
+result.playerTime=ops.player_time;
+result.computerTime=ops.computer_time;
+result.moveMargin=ops.computer_moves-ops.player_moves;
 
-if isequal(inputvariable, 'computer_flags_player_hole')
-    
-    if isnan(ops.player_time) %player enters black hole
-        txt_result='The alien lifeform made it to Earth. MISSION FAILURE!';
-        final_image=ops.black_hole_image;
+if strcmp(inputvariable,'computer_flags_player_hole')
+    result.outcome='loss';
+    result.message='The alien reached Earth. MISSION FAILURE!';
+    result.image=ops.black_hole_image;
+elseif strcmp(inputvariable,'computer_flags_player_flags')
+    if ops.computer_moves > ops.player_moves
+        result.outcome='win';
+        result.message='You reached Earth first. MISSION ACCOMPLISHED!';
+        result.image=ops.back_home_image;
+    elseif ops.computer_moves < ops.player_moves
+        result.outcome='loss';
+        result.message='The alien reached Earth first. MISSION FAILURE!';
+        result.image=ops.alien_invasion_image;
+    else
+        result.outcome='tie';
+        result.message='You reached Earth together. Prepare for a FACEOFF!';
+        result.image=ops.alien_faceoff_image;
     end
-    
-    
-elseif isequal(inputvariable, 'computer_flags_player_flags')
-        
-    if ops.computer_moves > ops.player_moves %player less moves than computer
-       txt_result='You made it back to Earth before the aliens. MISSION ACCOMPLISHED!';
-       final_image=ops.back_home_image;
-        %end
-        
-    elseif ops.computer_moves < ops.player_moves %computer less moves than player
-        txt_result='The alien lifeform made it to Earth before you did. MISSION FAILURE!';
-        final_image=ops.alien_invasion_image;
-        
-    elseif ops.computer_moves == ops.player_moves %draw
-        txt_result='You have both arrived at Earth. Prepare for a FACEOFF!';
-        final_image=ops.alien_faceoff_image;
-        
-    end
-    
-elseif isequal(inputvariable,'computer_hole_player_flags') %computer enters black hole
-    
-    txt_result='You made it back to Earth while the aliens went through a black hole. MISSION ACCOMPLISHED!';
-    final_image=ops.back_home_image;
-    
-elseif isequal(inputvariable,'computer_hole_player_hole') %both enter black hole
-    
-    txt_result='You have both been pulled into black holes. And while EARTH IS SAFE, could you possibly escape before reaching the event horizon?';
-    final_image=ops.black_hole_image;
-    
+elseif strcmp(inputvariable,'computer_hole_player_flags')
+    result.outcome='win';
+    result.message='You reached Earth while the alien found a black hole. MISSION ACCOMPLISHED!';
+    result.image=ops.back_home_image;
+else
+    result.outcome='tie';
+    result.message='Both ships entered black holes. Earth is safe...for now.';
+    result.image=ops.black_hole_image;
 end
 
-clf;
+end
 
-ops.figure.WindowState='maximized';
-set(gcf,'MenuBar','none');
-set(gca,'DataAspectRatioMode','auto');
-set(gca,'Position',[0 0 1 1]);
+function action=show_results(ops,result,stats)
 
-img=imread(final_image);
-image(img);
-axis image off
+clf(ops.figure);
+ax=axes('Parent',ops.figure,'Position',[0 0 1 1]);
+img=imread(result.image);
+image(ax,img);
+axis(ax,'image','off');
 
-AX=axis(gca); %can use this to get all the current axes
-figure_width=AX(2)-AX(1);
-figure_length=AX(4)-AX(3); 
+annotation(ops.figure,'textbox',[0.14,0.72,0.72,0.18], ...
+    'String',result.message,'EdgeColor','none','Color','w', ...
+    'FontSize',28,'FontWeight','bold','HorizontalAlignment','center', ...
+    'VerticalAlignment','middle','BackgroundColor','k','FaceAlpha',0.55);
 
-%for final game results
-rel_coords=abs_to_rel([figure_width*2/10,figure_length*8/10],ops);
-ops.txt_result_annot=annotation('textbox',[rel_coords(1),rel_coords(2),0.6,0.2],'String','','EdgeColor','none','FitBoxToText','off','BackgroundColor','black','FaceAlpha', 0.2,'HorizontalAlignment','center');
+player_time=format_time(result.playerTime);
+computer_time=format_time(result.computerTime);
+summary={ ...
+    ['Difficulty: ' result.difficulty]; ...
+    ['Your moves: ' num2str(result.playerMoves) '     Alien moves: ' num2str(result.computerMoves)]; ...
+    ['Your time: ' player_time '     Alien time: ' computer_time]};
+annotation(ops.figure,'textbox',[0.12,0.13,0.38,0.20], ...
+    'String',summary,'EdgeColor',[0.2 0.8 0.85],'LineWidth',1.2, ...
+    'Color','w','FontSize',14,'FontWeight','bold', ...
+    'VerticalAlignment','middle','BackgroundColor','k','FaceAlpha',0.62);
 
-ops.txt_result_annot.Color='white';
-ops.txt_result_annot.FontSize = 45;
-ops.txt_result_annot.FontWeight = 'bold';
+best_margin=best_win_margin(stats,result.difficulty);
+if isempty(best_margin)
+    best_text='Best winning margin: --';
+else
+    best_text=['Best winning margin: ' num2str(best_margin) ' moves'];
+end
+record={ ...
+    'ALL-TIME LOG'; ...
+    [num2str(stats.totalGames) ' matches']; ...
+    [num2str(stats.wins) ' wins  |  ' num2str(stats.losses) ' losses  |  ' num2str(stats.ties) ' ties']; ...
+    best_text; ...
+    'Match saved locally'};
+annotation(ops.figure,'textbox',[0.56,0.13,0.32,0.20], ...
+    'String',record,'EdgeColor',[0.95 0.55 0.15],'LineWidth',1.2, ...
+    'Color','w','FontSize',12,'FontWeight','bold', ...
+    'HorizontalAlignment','center','VerticalAlignment','middle', ...
+    'BackgroundColor','k','FaceAlpha',0.62);
 
-%for final game summary
-rel_coords=abs_to_rel([figure_width*2/10,figure_length*0/10],ops);
-ops.txt_summary_annot=annotation('textbox',[rel_coords(1),rel_coords(2),0.25,0.2],'String','','EdgeColor','none','FitBoxToText','off','BackgroundColor','black','FaceAlpha', 0.2);
+setappdata(ops.figure,'menu_action','quit');
+uicontrol(ops.figure,'Style','pushbutton','String','Play Again', ...
+    'Units','normalized','Position',[0.27 0.035 0.14 0.06], ...
+    'FontSize',11,'FontWeight','bold', ...
+    'Callback',@(src,~)resume_with_action(src,'play'));
+uicontrol(ops.figure,'Style','pushbutton','String','Main Menu', ...
+    'Units','normalized','Position',[0.43 0.035 0.14 0.06], ...
+    'FontSize',11,'FontWeight','bold', ...
+    'Callback',@(src,~)resume_with_action(src,'menu'));
+uicontrol(ops.figure,'Style','pushbutton','String','Quit', ...
+    'Units','normalized','Position',[0.59 0.035 0.14 0.06], ...
+    'FontSize',11, ...
+    'Callback',@(src,~)resume_with_action(src,'quit'));
 
-ops.txt_summary_annot.Color='white';
-ops.txt_summary_annot.FontSize = 20;
-ops.txt_summary_annot.FontWeight = 'bold';
+uiwait(ops.figure);
+if isgraphics(ops.figure)
+    action=getappdata(ops.figure,'menu_action');
+else
+    action='quit';
+end
 
-%draw_coordinates(ops);
+end
 
-txt_summary={['Number of player moves: ' num2str(ops.player_moves)]; ['Number of computer moves: ' num2str(ops.computer_moves)];...
-    ['Your time: ' num2str(round(ops.player_time)) 's']; ['Their time : ' num2str(round(ops.computer_time)) 's']};
+function value=format_time(seconds)
+if isnan(seconds)
+    value='--';
+else
+    value=[num2str(round(seconds)) ' s'];
+end
+end
 
-set(ops.txt_result_annot,'String',sprintf(txt_result));
-set(ops.txt_summary_annot,'String',(txt_summary));
+function stats=default_stats()
+stats.version=1;
+stats.totalGames=0;
+stats.wins=0;
+stats.losses=0;
+stats.ties=0;
+stats.history=struct('timestamp',{},'difficulty',{},'outcome',{}, ...
+    'playerMoves',{},'computerMoves',{},'playerTime',{}, ...
+    'computerTime',{},'moveMargin',{});
+end
 
-pause(6);
+function stats=load_stats()
+stats=default_stats();
+stats_file=get_stats_file();
+if isfile(stats_file)
+    try
+        saved=load(stats_file,'stats');
+        if isfield(saved,'stats') && isfield(saved.stats,'history')
+            stats=saved.stats;
+        end
+    catch
+        warning('BlackHoleMinesweeper:StatsReadFailed', ...
+            'The existing score log could not be read. Starting a new log.');
+    end
+end
+end
 
-delete(ops.txt_result_annot);
-delete(ops.txt_summary_annot);
+function stats=record_game(stats,result)
+stats.totalGames=stats.totalGames+1;
+switch result.outcome
+    case 'win'
+        stats.wins=stats.wins+1;
+    case 'loss'
+        stats.losses=stats.losses+1;
+    otherwise
+        stats.ties=stats.ties+1;
+end
 
-rel_coords=abs_to_rel([figure_width*2/10,figure_length*8/10],ops);
-ops.MCTSplay_annot=annotation('textbox',[rel_coords(1),rel_coords(2),0.6,0.2],'String','','EdgeColor','none','FitBoxToText','off','BackgroundColor','black','FaceAlpha', 0.2,'HorizontalAlignment','center');
+entry=struct( ...
+    'timestamp',result.timestamp, ...
+    'difficulty',result.difficulty, ...
+    'outcome',result.outcome, ...
+    'playerMoves',result.playerMoves, ...
+    'computerMoves',result.computerMoves, ...
+    'playerTime',result.playerTime, ...
+    'computerTime',result.computerTime, ...
+    'moveMargin',result.moveMargin);
+stats.history(end+1)=entry;
+end
 
-ops.MCTSplay_annot.Color='white';
-ops.MCTSplay_annot.FontSize = 35;
-ops.MCTSplay_annot.FontWeight = 'bold';
+function save_stats(stats)
+stats_file=get_stats_file();
+stats_dir=fileparts(stats_file);
+try
+    if ~isfolder(stats_dir)
+        mkdir(stats_dir);
+    end
+    save(stats_file,'stats');
+    if ~isempty(stats.history)
+        writetable(struct2table(stats.history), ...
+            fullfile(stats_dir,'match_history.csv'));
+    end
+catch err
+    warning('BlackHoleMinesweeper:StatsWriteFailed', ...
+        'Could not save the score log: %s',err.message);
+end
+end
 
-MCTSplay='Find out how the alien life form solves the map';
-set(ops.MCTSplay_annot,'String',(MCTSplay));
-%    txt_play={['The life 
-%set(ops.txt_play_annot, 'String',sprintf(txt_play));
-pause(3);
+function stats_file=get_stats_file()
+stats_file=fullfile(prefdir,'BlackHoleMinesweeper','stats.mat');
+end
 
+function margin=best_win_margin(stats,difficulty)
+margin=[];
+if isempty(stats.history)
+    return
+end
+is_match=strcmp({stats.history.difficulty},difficulty) & ...
+    strcmp({stats.history.outcome},'win');
+if any(is_match)
+    margin=max([stats.history(is_match).moveMargin]);
+end
 end
 
 function [action type]=player_input(ops)
