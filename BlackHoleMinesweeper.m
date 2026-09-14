@@ -473,7 +473,11 @@ result.playerMoves=ops.player_moves;
 result.computerMoves=ops.computer_moves;
 result.playerTime=ops.player_time;
 result.computerTime=ops.computer_time;
-result.moveMargin=ops.computer_moves-ops.player_moves;
+if isnan(ops.player_time) || isnan(ops.computer_time)
+    result.moveMargin=NaN;
+else
+    result.moveMargin=ops.computer_moves-ops.player_moves;
+end
 
 if strcmp(inputvariable,'computer_flags_player_hole')
     result.outcome='loss';
@@ -658,7 +662,11 @@ end
 is_match=strcmp({stats.history.difficulty},difficulty) & ...
     strcmp({stats.history.outcome},'win');
 if any(is_match)
-    margin=max([stats.history(is_match).moveMargin]);
+    margins=[stats.history(is_match).moveMargin];
+    margins=margins(~isnan(margins));
+    if ~isempty(margins)
+        margin=max(margins);
+    end
 end
 end
 
@@ -1426,5 +1434,4 @@ txt = ['Moves: \nYours: ' num2str(ops.player_moves) ' Theirs: ' num2str(ops.comp
 set(ops.m_annot,'String',sprintf(txt));
 
 end
-
 
