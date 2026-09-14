@@ -6,6 +6,12 @@
 
 Built by Dan during the pandemic, 2020–2021, after reading about Monte Carlo tree search in Sutton and Barto. Inspired by Z's fondness for Minesweeper. Revived and packaged for release in 2026.
 
+## Download for Windows
+
+**[Download the latest Windows installer](https://github.com/DanEgert/black-hole-minesweeper-game/releases/latest/download/BlackHoleMinesweeperInstaller.exe)**
+
+MATLAB is not required. The installer downloads the free MATLAB Runtime it needs.
+
 ## The mission
 
 Navigate a field of black holes and complete the map before an alien agent. After you finish—or disappear into a black hole—the alien plays the same map. Its estimated black-hole probabilities appear as a heatmap.
@@ -18,9 +24,29 @@ Fewer moves wins. Time is recorded, but patience is usually the better navigatio
 
 ## Play on Windows
 
-The easiest route is the installer on the repository's **Releases** page (click link on the right). It installs the free MATLAB Runtime automatically; MATLAB and a MATLAB license are not required.
+1. Use the prominent download link above. Alternatively, open the repository's **Releases** page, select the latest release, expand **Assets**, and choose `BlackHoleMinesweeperInstaller.exe`.
+2. Run the installer. If Windows shows a blue protection warning, select **More info**, then **Run anyway**. The installer is unsigned, so this warning is expected.
+3. Finish installation and launch **Black Hole Minesweeper** from the Start menu.
+
+The installer downloads the free MATLAB Runtime automatically; MATLAB and a MATLAB license are not required. If the game does not open immediately after the first installation, restart Windows once and try again.
 
 The first installation may take a while because the MATLAB Runtime is much larger than the game itself.
+
+## At the controls
+
+The opening screen contains a short mission briefing and the complete controls. Select a difficulty and press **Play**.
+
+- Left-click: reveal a sector
+- Right-click: flag or unflag a black hole
+- How the alien thinks: optional explanation of the agent's strategy
+
+After both ships have played, the results screen remains open. From there you can replay the same difficulty, return to the main menu, or quit.
+
+## Scores and match history
+
+The game keeps a local record of completed matches: difficulty, outcome, moves, times, and winning margin. The main menu and results screen show the overall record, plus the best winning margin for the current difficulty.
+
+The history is stored in MATLAB's writable preferences directory, not beside the installed executable, so it survives application upgrades. It is saved as both `stats.mat` and a readable `match_history.csv`. MATLAB users can find the parent directory by running `prefdir`.
 
 ## Run from MATLAB
 
@@ -33,11 +59,6 @@ MATLAB R2021a or newer is recommended. The game uses base MATLAB functions and d
    ```matlab
    BlackHoleMinesweeper
    ```
-
-Controls:
-
-- Left-click: reveal a sector
-- Right-click: flag or unflag a black hole
 
 ## How the alien thinks
 
