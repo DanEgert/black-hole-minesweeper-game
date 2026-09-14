@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — First-player polish
+
+- Added a clearer in-game How to Play panel and optional alien-strategy explanation.
+- Replaced the automatic shutdown with a persistent results screen.
+- Added Play Again, Main Menu, and Quit controls after every match.
+- Added a durable local match log with wins, losses, ties, moves, times, and difficulty.
+- Added all-time statistics and best winning move margin to the interface.
+- Expanded Windows download, SmartScreen, and first-launch instructions.
+
 ## 1.0.0 — 2026 public edition
 
 - Packaged the pandemic-era MATLAB game as a stable `BlackHoleMinesweeper` entry point.
